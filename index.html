@@ -551,6 +551,7 @@
         }
         function check_file(csv, raw_data){
             var result_csv = [];
+            var real_row_number = 1;
             for(var row = 0; row < csv.length; row++){
                 var row_data = csv[row];
                 var output_row = row_data.map(column => column.trim());
@@ -582,7 +583,7 @@
                     col_email_index = output_row.indexOf(COL_EMAIL_LABEL);
                     col_phone_index = output_row.indexOf(COL_PHONE_LABEL);
                 }else{
-                    console.log("Ligne " + (row + 1) + " ↓");
+                    console.log("Ligne " + real_row_number + " ↓");
                     console.log(output_row);
                     var output_firstname, firstname, output_lastname, lastname, output_email, email, output_phone, phone;
                     output_firstname = firstname = output_row[col_firstname_index];
@@ -614,7 +615,7 @@
 
                     // Populate errors array
                     if(has_email_error){
-                        errors_array["email_error"].push(create_error_object(row, output_email));
+                        errors_array["email_error"].push(create_error_object(real_row_number, output_email));
                     }
 
                     // Nettoyage champ téléphone - Espaces ↓
@@ -675,7 +676,7 @@
                     if(has_phone_error){
                         console.log("⚠ Erreur au niveau du champ téléphone ↓")
                         console.log("output_phone", output_phone);
-                        errors_array["phone_error"].push(create_error_object(row, output_phone));
+                        errors_array["phone_error"].push(create_error_object(real_row_number, output_phone));
                         output_phone = ""; // Vidage du champ
                     }
 
@@ -684,7 +685,7 @@
                         || (is_email_empty && (has_phone_error || is_phone_empty))){
                         console.log("⚠ Erreur : aucun moyen de communication valide ↓")
                         console.log("output_email", output_email, "output_phone", output_phone);
-                        errors_array["missing_contact_info"].push(create_error_object(row, "Email : " + output_email + " Téléphone : " + output_phone));
+                        errors_array["missing_contact_info"].push(create_error_object(real_row_number, "Email : " + output_email + " Téléphone : " + output_phone));
                         skip_line = true;
                     }
 
@@ -711,7 +712,7 @@
                         has_firstname_error = true;
                         console.log("⚠ Erreur fatale firstname ↓")
                         console.log(output_firstname)
-                        errors_array["firstname_error"].push(create_error_object(row, output_firstname))
+                        errors_array["firstname_error"].push(create_error_object(real_row_number, output_firstname))
                         skip_line = true;
                     }
                     // Vérification lastname
@@ -719,7 +720,7 @@
                         has_lastname_error = true;
                         console.log("⚠ Erreur fatale lastname ↓")
                         console.log(output_lastname)
-                        errors_array["lastname_error"].push(create_error_object(row, output_lastname))
+                        errors_array["lastname_error"].push(create_error_object(real_row_number, output_lastname))
                         skip_line = true;
                     }
                     output_row[col_firstname_index] = output_firstname;
@@ -733,8 +734,10 @@
                     console.log("Ligne " + (row + 1) + " supprimée car erreur fatale");
                     csv.splice(row, row + 1);
                     row = row - 1;
-                    errors_array["skipped_lines"].push(create_error_object(row, output_row.join(", ")));
+                    errors_array["skipped_lines"].push(create_error_object(real_row_number, output_row.join(", ")));
                 }
+
+                real_row_number++;
             }
             console.log("Version finale ↓");
             console.log(csv);
