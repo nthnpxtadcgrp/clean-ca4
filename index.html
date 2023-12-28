@@ -522,11 +522,11 @@
             var output_string = "";
             var output_array = ["Votre fichier a été téléchargé avec succès !"];
             var labels = {
-                "email_error": "Erreurs d'email",
-                "phone_error": "Erreurs téléphone",
-                "firstname_error": "Erreur prénom (firstName)",
-                "lastname_error": "Erreur nom (lastName)",
-                "missing_contact_info": "Erreur aucun moyen de contact valide",
+                "email_error": "Erreurs d'email (champ vidé)",
+                "phone_error": "Erreurs téléphone (champ vidé)",
+                "firstname_error": "Erreur prénom (firstName) (à vous de corriger)",
+                "lastname_error": "Erreur nom (lastName) (à vous de corriger)",
+                "missing_contact_info": "Erreur aucun moyen de contact valide (ligne supprimée)",
                 "skipped_lines": "Liste des lignes supprimées"
             }
             var details = {
@@ -609,6 +609,7 @@
                         console.log("⚠ Erreur au niveau du champ email ↓")
                         console.log("output_email", output_email);
                         has_email_error = true;
+                        output_email = ""; // Nettoyage du champ
                     }
 
                     // Populate errors array
@@ -675,6 +676,7 @@
                         console.log("⚠ Erreur au niveau du champ téléphone ↓")
                         console.log("output_phone", output_phone);
                         errors_array["phone_error"].push(create_error_object(row, output_phone));
+                        output_phone = ""; // Vidage du champ
                     }
 
                     // Vérification si moyen de contact présent
