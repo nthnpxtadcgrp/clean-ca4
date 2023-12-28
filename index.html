@@ -524,8 +524,8 @@
             var labels = {
                 "email_error": "Erreurs d'email (champ vidé)",
                 "phone_error": "Erreurs téléphone (champ vidé)",
-                "firstname_error": "Erreur prénom (firstName) (à vous de corriger)",
-                "lastname_error": "Erreur nom (lastName) (à vous de corriger)",
+                "firstname_error": "Erreur prénom (firstName) (à vous de corriger, ligne supprimée)",
+                "lastname_error": "Erreur nom (lastName) (à vous de corriger, ligne supprimée)",
                 "missing_contact_info": "Erreur aucun moyen de contact valide (ligne supprimée)",
                 "skipped_lines": "Liste des lignes supprimées"
             }
@@ -732,6 +732,7 @@
                 if(skip_line){
                     console.log("Ligne " + (row + 1) + " supprimée car erreur fatale");
                     csv.splice(row, row + 1);
+                    row = row - 1;
                     errors_array["skipped_lines"].push(create_error_object(row, output_row.join(", ")));
                 }
             }
