@@ -73,14 +73,14 @@
         </div>
         <button type="submit" id="clean-up">Nettoyer et télécharger</button>
         <div class="ib">
-            <label for="display-popup" class="clickable-text">Aide</label>
+            <label for="display-popup" class="clickable-text">Aide + <b style="color: green;">RGPD</b></label>
         </div>
     </form>
     <hr>
     <textarea name="output" id="output" style="min-width: 100%; width: 100%;" rows="20"></textarea>
     <input type="checkbox" id="display-popup" style="display: none;">
     <div id="help-popup" style="text-align: justify;">
-        <h2 style="text-align: center;">Aide</h2>
+        <h2 style="text-align: center;">Aide + <b style="color: green;">RGPD</b></h2>
         <p>
             Cet outil permet de résoudre les problèmes de CSV avec CA4.<br>
         </p>
@@ -119,6 +119,9 @@
         </ul>
         <p style="text-align: center; margin-top: 32px;">
             <label for="display-popup" class="clickable-text">Fermer cette aide</label>
+        </p>
+        <p style="color: green;">
+            <b>Les fichiers CSV ne sont pas stockés. Le code est exécuté côté client.</b>
         </p>
     </div>
     <script type="module">
