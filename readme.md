@@ -14,3 +14,7 @@ Le détail des erreurs s'affiche pour que le recruteur puisse corriger son fichi
 1. Sélectionner un fichier puis cliquer sur le bouton
 2. La liste des erreurs s'affiche en dessous
 3. Le fichier nettoyé est automatiquement téléchargé
+
+## RGPD
+Les fichiers ne sont pas téléversés.
+Les fichiers générés ne sont pas stockés.
