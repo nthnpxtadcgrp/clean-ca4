@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nettoyage fichier CA4</title>
+</head>
+<body>
+    <style>
+        .ib{
+            display: inline-block;
+        }
+        *{
+            box-sizing: border-box;
+        }
+        html, body{
+            font-family: 'Courier New', Courier, monospace;
+        }
+        textarea{
+            overflow: scroll;
+        }
+        hr{
+            border-style: dashed;
+            border-color: blue;
+        }
+        #help-popup{
+            display: none;
+            position: fixed;
+            left: 50%;
+            top: 50%;
+            max-width: 90%;
+            max-height: 90%;
+            overflow: auto;
+            padding: 15px;
+            background: white;
+            box-shadow: 0 0 15px black;
+            transform: translate(-50%, -50%);
+            min-width: 300px;
+            max-width: 50%;
+        }
+        #display-popup:checked ~ #help-popup{
+            display: block;
+        }
+        code{
+            background-color: black;
+            color: white;
+            display: inline-block;
+            padding: 2px;
+            font-weight: bold;
+        }
+        .clickable-text{
+            color: blue;
+            text-decoration: underline;
+            cursor: pointer;
+        }
+        .clickable-text:hover{
+            color: blueviolet;
+        }
+    </style>
+    <h1>Nettoyer CSV</h1>
+    <form action="" id="upload-form" enctype="multipart/form-data">
+        <div style="margin-bottom: 12px;">
+            <b>Sélectionner fichier :</b>
+            <input type="file" required id="fichier-ca4" />
+        </div>
+        <div style="margin-bottom: 12px;">
+            <b>Sélectionner séparateur :</b>
+            <select name="separator" id="separator">
+                <option selected id="option-separator-automatic" value="automatic">Détection automatique</option>
+                <option value=";">; (point-virgule)</option>
+                <option value=",">, (virgule)</option>
+            </select>
+        </div>
+        <button type="submit" id="clean-up">Nettoyer et télécharger</button>
+        <div class="ib">
+            <label for="display-popup" class="clickable-text">Aide</label>
+        </div>
+    </form>
+    <hr>
+    <textarea name="output" id="output" style="min-width: 100%; width: 100%;" rows="20"></textarea>
+    <input type="checkbox" id="display-popup" style="display: none;">
+    <div id="help-popup" style="text-align: justify;">
+        <h2 style="text-align: center;">Aide</h2>
+        <p>
+            Cet outil permet de résoudre les problèmes de CSV avec CA4.<br>
+        </p>
+        <p style="text-align: center;">
+            <b>Marche à suivre :</b>
+        </p>
+        <ul>
+            <li>Dans Excel, enregistrez votre fichier au format <code>CSV (séparateur : point-virgule) (*.csv)</code></li>
+            <li>Ici, sélectionnez votre fichier CSV.</li>
+            <li>Cliquez ensuite sur <code>Nettoyer et télécharger</code></li>
+            <li>Votre fichier nettoyé est automatiquement téléchargé.</li>
+        </ul>
+        <p style="text-align: center;">
+            <b>Un problème ?</b>
+        </p>
+        <ul>
+            <li>Si des lignes étaient invalides, elles ont été supprimées du fichier.</li>
+            <li>Le détail des erreurs est affiché en dessous.</li>
+            <li>Si jamais ça n'a pas fonctionné, assurez-vous d'avoir bien enregistré votre fichier au format demandé.</li>
+            <li>Si ça ne fonctionne toujours pas, indiquez <code>,</code> dans le champ <code>Séparateur</code></li>
+        </ul>
+        <p style="text-align: center;">
+            <b>Colonnes obligatoires :</b>
+        </p>
+        <ul>
+            <li>firstName</li>
+            <li>lastName</li>
+            <li>email</li>
+            <li>phone</li>
+        </ul>
+        <p style="text-align: center;">
+            <b>Colonnes interdites :</b>
+        </p>
+        <ul>
+            <li>id</li>
+        </ul>
+        <p style="text-align: center; margin-top: 32px;">
+            <label for="display-popup" class="clickable-text">Fermer cette aide</label>
+        </p>
+    </div>
+    <script type="module">
+        //import { parse, stringify } from '/csv-main/index.js'
+        /*
+        #####################################################################################################################################
+        #####################################################################################################################################
+        #####################################################################################################################################
+        #####################################################################################################################################
+                                                                        Import 
+        #####################################################################################################################################
+        #####################################################################################################################################
+        #####################################################################################################################################
+        #####################################################################################################################################
+        */
+        /**
+        * Parse takes a string of CSV data and converts it to a 2 dimensional array
+        *
+        * options
+        * - typed - infer types [false]
+        * - separator - use custom separator [,]
+        * - delimiter - use custom delimiter ["]
+        *
+        * @static
+        * @param {string} csv the CSV string to parse
+        * @param {Object} [options] an object containing the options
+        * @param {Function} [reviver] a custom function to modify the values
+        * @returns {Array} a 2 dimensional array of `[entries][values]`
+        */
+        export function parse(csv, options, reviver = (v) => v) {
+        const ctx = Object.create(null);
+        ctx.options = options || {};
+        ctx.reviver = reviver;
+        ctx.value = "";
+        ctx.entry = [];
+        ctx.output = [];
+        ctx.col = 1;
+        ctx.row = 1;
+
+        ctx.options.delimiter =
+            ctx.options.delimiter === undefined ? '"' : options.delimiter;
+        if (ctx.options.delimiter.length > 1 || ctx.options.delimiter.length === 0)
+            throw Error(
+            `CSVError: delimiter must be one character [${ctx.options.separator}]`
+            );
+
+        ctx.options.separator =
+            ctx.options.separator === undefined ? "," : options.separator;
+        if (ctx.options.separator.length > 1 || ctx.options.separator.length === 0)
+            throw Error(
+            `CSVError: separator must be one character [${ctx.options.separator}]`
+            );
+
+        const lexer = new RegExp(
+            `${escapeRegExp(ctx.options.delimiter)}|${escapeRegExp(
+            ctx.options.separator
+            )}|\r\n|\n|\r|[^${escapeRegExp(ctx.options.delimiter)}${escapeRegExp(
+            ctx.options.separator
+            )}\r\n]+`,
+            "y"
+        );
+        const isNewline = /^(\r\n|\n|\r)$/;
+
+        let matches = [];
+        let match = "";
+        let state = 0;
+
+        while ((matches = lexer.exec(csv)) !== null) {
+            match = matches[0];
+
+            switch (state) {
+            case 0: // start of entry
+                switch (true) {
+                case match === ctx.options.delimiter:
+                    state = 3;
+                    break;
+                case match === ctx.options.separator:
+                    state = 0;
+                    valueEnd(ctx);
+                    break;
+                case isNewline.test(match):
+                    state = 0;
+                    valueEnd(ctx);
+                    entryEnd(ctx);
+                    break;
+                default:
+                    ctx.value += match;
+                    state = 2;
+                    break;
+                }
+                break;
+            case 2: // un-delimited input
+                switch (true) {
+                case match === ctx.options.separator:
+                    state = 0;
+                    valueEnd(ctx);
+                    break;
+                case isNewline.test(match):
+                    state = 0;
+                    valueEnd(ctx);
+                    entryEnd(ctx);
+                    break;
+                default:
+                    state = 4;
+                    throw Error(
+                    `CSVError: Illegal state [row:${ctx.row}, col:${ctx.col}]`
+                    );
+                }
+                break;
+            case 3: // delimited input
+                switch (true) {
+                case match === ctx.options.delimiter:
+                    state = 4;
+                    break;
+                default:
+                    state = 3;
+                    ctx.value += match;
+                    break;
+                }
+                break;
+            case 4: // escaped or closing delimiter
+                switch (true) {
+                case match === ctx.options.delimiter:
+                    state = 3;
+                    ctx.value += match;
+                    break;
+                case match === ctx.options.separator:
+                    state = 0;
+                    valueEnd(ctx);
+                    break;
+                case isNewline.test(match):
+                    state = 0;
+                    valueEnd(ctx);
+                    entryEnd(ctx);
+                    break;
+                default:
+                    throw Error(
+                    `CSVError: Illegal state [row:${ctx.row}, col:${ctx.col}]`
+                    );
+                }
+                break;
+            }
+        }
+
+        // flush the last value
+        if (ctx.entry.length !== 0) {
+            valueEnd(ctx);
+            entryEnd(ctx);
+        }
+
+        return ctx.output;
+        }
+
+        /**
+        * Stringify takes a 2 dimensional array of `[entries][values]` and converts them to CSV
+        *
+        * options
+        * - eof - add a trailing newline at the end of file [true]
+        * - separator - use custom separator [,]
+        * - delimiter - use custom delimiter ["]
+        *
+        * @static
+        * @param {Array} array the input array to stringify
+        * @param {Object} [options] an object containing the options
+        * @param {Function} [replacer] a custom function to modify the values
+        * @returns {string} the CSV string
+        */
+        export function stringify(array, options = {}, replacer = (v) => v) {
+        const ctx = Object.create(null);
+        ctx.options = options;
+        ctx.options.eof = ctx.options.eof !== undefined ? ctx.options.eof : true;
+        ctx.row = 1;
+        ctx.col = 1;
+        ctx.output = "";
+
+        ctx.options.delimiter =
+            ctx.options.delimiter === undefined ? '"' : options.delimiter;
+        if (ctx.options.delimiter.length > 1 || ctx.options.delimiter.length === 0)
+            throw Error(
+            `CSVError: delimiter must be one character [${ctx.options.separator}]`
+            );
+
+        ctx.options.separator =
+            ctx.options.separator === undefined ? "," : options.separator;
+        if (ctx.options.separator.length > 1 || ctx.options.separator.length === 0)
+            throw Error(
+            `CSVError: separator must be one character [${ctx.options.separator}]`
+            );
+
+        const needsDelimiters = new RegExp(
+            `${escapeRegExp(ctx.options.delimiter)}|${escapeRegExp(
+            ctx.options.separator
+            )}|\r\n|\n|\r`
+        );
+
+        array.forEach((row, rIdx) => {
+            let entry = "";
+            ctx.col = 1;
+            row.forEach((col, cIdx) => {
+            if (typeof col === "string") {
+                col = col.replace(
+                ctx.options.delimiter,
+                `${ctx.options.delimiter}${ctx.options.delimiter}`
+                );
+                col = needsDelimiters.test(col)
+                ? `${ctx.options.delimiter}${col}${ctx.options.delimiter}`
+                : col;
+            }
+            entry += replacer(col, ctx.row, ctx.col);
+            if (cIdx !== row.length - 1) {
+                entry += ctx.options.separator;
+            }
+            ctx.col++;
+            });
+            switch (true) {
+            case ctx.options.eof:
+            case !ctx.options.eof && rIdx !== array.length - 1:
+                ctx.output += `${entry}\n`;
+                break;
+            default:
+                ctx.output += `${entry}`;
+                break;
+            }
+            ctx.row++;
+        });
+
+        return ctx.output;
+        }
+
+        /** @private */
+        function valueEnd(ctx) {
+        const value = ctx.options.typed ? inferType(ctx.value) : ctx.value;
+        ctx.entry.push(ctx.reviver(value, ctx.row, ctx.col));
+        ctx.value = "";
+        ctx.col++;
+        }
+
+        /** @private */
+        function entryEnd(ctx) {
+        ctx.output.push(ctx.entry);
+        ctx.entry = [];
+        ctx.row++;
+        ctx.col = 1;
+        }
+
+        /** @private */
+        function inferType(value) {
+        const isNumber = /.\./;
+
+        switch (true) {
+            case value === "true":
+            case value === "false":
+            return value === "true";
+            case isNumber.test(value):
+            return parseFloat(value);
+            case isFinite(value):
+            return parseInt(value);
+            default:
+            return value;
+        }
+        }
+
+        /** @private */
+        function escapeRegExp(str) {
+        return str.replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, "\\$&");
+        }
+        /*
+        #####################################################################################################################################
+        #####################################################################################################################################
+        #####################################################################################################################################
+        #####################################################################################################################################
+                                                                        Import 
+        #####################################################################################################################################
+        #####################################################################################################################################
+        #####################################################################################################################################
+        #####################################################################################################################################
+        */
+
+        const V_SEPARATOR_AUTOMATIC = "automatic";
+        document.getElementById("option-separator-automatic").value = V_SEPARATOR_AUTOMATIC;
+        const ALLOWED_ACCENTS = "AaÂâÁáÄäÃãÀàÅåBbCcDdÇçEeÉéÊêÈèËëGgHhIiÍíÌìÏïiJÎîKkLljMmNnÑñOoÒòÓóÔôÖöÕõPpRrQqSsTtÚúÜüÙùUuÛûVvXxWwYyÝýZzŸÿ";
+        // Gestion du click
+        var submit_button = document.getElementById("clean-up");
+        submit_button.addEventListener("click", function (e) {
+            console.clear();
+            errors_array = {
+                "email_error": [
+                    // { "line_number": 1, input_value: "xxx@gmail,com" }
+                ],
+                "phone_error": [
+                ],
+                "firstname_error": [
+                ],
+                "lastname_error": [
+                ],
+                "missing_contact_info": [],
+                "skipped_lines": []
+            }
+            document.getElementById("output").value = "";
+            // Vérification du champ "separator"
+            var separator_input = document.getElementById("separator");
+            if(!separator_input.reportValidity()){
+                alert("⚠ Erreur fatale. Veuillez indiquer le séparateur de votre fichier.")
+                return false;
+            }
+            var the_separator = separator_input.value;
+            var the_form = document.getElementById("upload-form");
+            var form_data = new FormData(the_form);
+            // Vérification du champ upload
+            var file_input = document.getElementById("fichier-ca4");
+            if(file_input.files.length != 1){
+                alert("⚠ Erreur : veuillez sélectionner un fichier");
+                return false;
+            }else{
+                // OK
+                var the_file = file_input.files[0];
+                var csv_reader = new FileReader();
+                var the_filename = "";
+                csv_reader.onload = function(e){
+                    console.log("Fichier source ↓");
+                    console.log(e.target.result);
+                    var the_file_content = e.target.result;
+                    if(the_separator == V_SEPARATOR_AUTOMATIC){
+                        the_separator = detectCSVSeparator(the_file_content); // détecte , (virgule) ; (point-virgule), tabulation et | (pipe)
+                        var the_separator_name = the_separator;
+                        if(the_separator_name == "\t"){
+                            the_separator_name = "tabulation";
+                        }
+                    }
+                    // Parsing CSV
+                    try{
+                        var the_parsed_csv = parse(the_file_content, { "separator": the_separator });
+                    }catch(exception){
+                        console.log(exception);
+                        alert("⚠ Erreur fatale. Veuillez vérifier le format de votre fichier CSV et/ou changer le séparateur.")
+                        return false;
+                    }
+                    var copy_parsed_csv = parse(the_file_content, {"separator": the_separator});
+                    console.log("Fichier parsé ↓");
+                    console.log(copy_parsed_csv);
+                    // Vérification et nettoyage CSV
+                    try{
+                        var result_object = check_file(the_parsed_csv);
+                        console.log("Liste des erreurs →", result_object["errors_array"]);
+                        var errors_string = get_errors_list_as_string(result_object["errors_array"]);
+                        if(separator_input.value == V_SEPARATOR_AUTOMATIC){
+                            errors_string = "Séparateur détecté => " + the_separator_name + "\n" + errors_string;
+                        }
+                        document.getElementById("output").value = errors_string;
+                        createAndDownloadCSV(result_object["output_csv"], the_filename);
+                    }catch(Exception){
+                        alert(Exception.message);
+                        // alert("⚠ Erreur : vérifiez que votre fichier est au format UTF-8 et que le séparateur est bien le point-virgule ");
+                    }
+                }
+                if(file_input.files[0].type != "text/csv"){
+                    alert("⚠ Erreur : veuillez choisir un fichier au format CSV");
+                    return false;
+                }
+                csv_reader.readAsText(the_file);
+                console.log("Nom du fichier", file_input.files[0].name)
+                the_filename = file_input.files[0].name;
+                // console.log(file_input.getAttribute("files"));
+                // console.log(form_data);
+                // console.log(the_form);
+            }
+            e.preventDefault();
+        });
+        const COL_FIRSTNAME_LABEL = "firstName";
+        const COL_LASTNAME_LABEL = "lastName";
+        const COL_EMAIL_LABEL = "email";
+        const COL_PHONE_LABEL = "phone";
+        var col_firstname_index = -1;
+        var col_lastname_index = -1;
+        var col_email_index = -1;
+        var col_phone_index = -1;
+        var errors_array = {
+            "email_error": [
+                // { "line_number": 1, input_value: "xxx@gmail,com" }
+            ],
+            "phone_error": [
+            ],
+            "firstname_error": [
+            ],
+            "lastname_error": [
+            ],
+            "missing_contact_info": [],
+            "skipped_lines": []
+        }
+
+        /** 
+        * Retourne une string avec toutes les erreurs
+        * @param {Object} errors_array - Objet d'objets contenant les erreurs
+        * @param {Object} line_break - Comment doit être séparée chaque ligne de l'output
+        * @return {String} Liste des erreurs.
+        */
+        function get_errors_list_as_string(errors_array, line_break){
+            if(!line_break)
+                line_break = "\n";
+
+            var output_string = "";
+            var output_array = ["Votre fichier a été téléchargé avec succès !"];
+            var labels = {
+                "email_error": "Erreurs d'email",
+                "phone_error": "Erreurs téléphone",
+                "firstname_error": "Erreur prénom (firstName)",
+                "lastname_error": "Erreur nom (lastName)",
+                "missing_contact_info": "Erreur aucun moyen de contact valide",
+                "skipped_lines": "Liste des lignes supprimées"
+            }
+            var details = {
+                "email_error": "Email",
+                "phone_error": "Téléphone",
+                "firstname_error": "Prénom (firstName)",
+                "lastname_error": "Nom (lastName)",
+                "missing_contact_info": "Aucun moyen de contact valide",
+                "skipped_lines": "Ligne"
+            }
+            for(let [index, child_array] of Object.entries(errors_array)){
+                if(child_array.length == 0){
+                    continue;
+                }
+                output_array.push("-----------------------------------------------");
+                output_array.push(labels[index] + " : ");
+                for(let [child_index, one_error] of Object.entries(child_array)){
+                    output_array.push("- Ligne " + one_error.line_number + " - " + details[index] + " => " + one_error.input_value);
+                }
+            }
+            return output_array.join(line_break);
+        }
+        function check_file(csv, raw_data){
+            var result_csv = [];
+            for(var row = 0; row < csv.length; row++){
+                var row_data = csv[row];
+                var output_row = row_data.map(column => column.trim());
+                var skip_line = false;
+                // Vérification des colonnes obligatoires
+                // if(output_row.length < 4){
+                //     var exception = new Object();
+                //     exception.message = "⚠ Erreur : il manque une ou plusieurs colonnes obligatoires dans votre fichier ou alors le séparateur indiqué n'est pas le bon.";
+                //     throw exception;
+                // }
+                if(row == 0){
+                    // Nettoyage des entêtes
+                    var result = clean_first_line(output_row);
+                    console.log("Première ligne nettoyée ↓");
+                    console.log(result.data);
+                    output_row = result.data;
+                    console.log("⚠ clean_first_line warnings", result.warnings);
+                    console.log("⚠ clean_first_line fatal error ?", result.fatal_error);
+                    if(result.fatal_error){
+                        var exception = new Object();
+                        // exception.message = "⚠ Une erreur fatale est survenue au niveau des entêtes de colonne.\r\rVous devez avoir au moins avoir ces 4 colonnes :\r- firstname\r- lastname\r- email\r- phone\r\rVotre fichier ne doit pas contenir la colonne \"id\"";
+                        exception.message = "⚠ Une erreur est survenue sur les entêtes de colonne." + "\n" + result.warnings.join("\n");
+                        throw exception;
+                    }
+
+                    // Récupération des index de colonnes
+                    col_firstname_index = output_row.indexOf(COL_FIRSTNAME_LABEL);
+                    col_lastname_index = output_row.indexOf(COL_LASTNAME_LABEL);
+                    col_email_index = output_row.indexOf(COL_EMAIL_LABEL);
+                    col_phone_index = output_row.indexOf(COL_PHONE_LABEL);
+                }else{
+                    console.log("Ligne " + (row + 1) + " ↓");
+                    console.log(output_row);
+                    var output_firstname, firstname, output_lastname, lastname, output_email, email, output_phone, phone;
+                    output_firstname = firstname = output_row[col_firstname_index];
+                    output_lastname = lastname = output_row[col_lastname_index];
+                    output_email = email = output_row[col_email_index];
+                    output_phone = phone = output_row[col_phone_index];
+
+                    // Suppression des espaces en début et fin de ligne
+                    output_firstname = output_firstname.trim();
+                    output_lastname = output_lastname.trim();
+                    output_email = output_email.trim();
+                    output_phone = output_phone.trim();
+
+                    // Vérification format email
+                    var has_email_error, is_email_empty;
+                    has_email_error = is_email_empty = false;
+                    var input = document.createElement("input");
+                    input.value = email;
+                    input.type = "email";
+                    if(!output_email){
+                        is_email_empty = true;
+                    }
+                    else if(!input.checkValidity()){
+                        console.log("⚠ Erreur au niveau du champ email ↓")
+                        console.log("output_email", output_email);
+                        has_email_error = true;
+                    }
+
+                    // Populate errors array
+                    if(has_email_error){
+                        errors_array["email_error"].push(create_error_object(row, output_email));
+                    }
+
+                    // Nettoyage champ téléphone - Espaces ↓
+                    if(output_phone.indexOf(" ") !== -1){
+                        output_phone = output_phone.split("");
+                        output_phone = output_phone.map(character => {
+                            return character.replace(" ", "");
+                        });
+                        output_phone = output_phone.join("");
+                        console.log("Champ téléphone nettoyé des espaces ↓");
+                        console.log(output_phone);
+                    }
+                    // Points ↓
+                    if(output_phone.indexOf(".") !== -1){
+                        output_phone = output_phone.split("");
+                        output_phone = output_phone.map(character => {
+                            return character.replace(".", "");
+                        });
+                        output_phone = output_phone.join("");
+                        console.log("Champ téléphone nettoyé des points ↓");
+                        console.log(output_phone);
+                    }
+
+                    // Vérification format téléphone
+                    var has_phone_error, is_phone_empty;
+                    has_phone_error = is_phone_empty = false;
+                    var input_phone = document.createElement("input");
+                    input_phone.type = "phone";
+                    input_phone.value = output_phone;
+
+                    if(!output_phone){
+                        is_phone_empty = true;
+                    }
+                    else if(!input_phone.checkValidity()){
+                        has_phone_error = true;
+                    }
+                    // Vérification format international +33612345678
+                    else if((output_phone.startsWith("+336") || output_phone.startsWith("+337"))
+                     && output_phone.length != 12){
+                        has_phone_error = true;
+                    }
+                    // Vérification format international 33612345678
+                    else if((output_phone.startsWith("336") || output_phone.startsWith("337"))
+                     && output_phone.length != 11){
+                        has_phone_error = true;
+                    }
+                    // Vérification format national sans 0 au début
+                    else if((output_phone.startsWith("6") || output_phone.startsWith("7"))
+                     && output_phone.length != 9){ // Vérification sans 0 au début
+                        has_phone_error = true;
+                    }
+                    // Vérification format national avec 0 au début
+                    else if((output_phone.startsWith("06") || output_phone.startsWith("07"))
+                     && output_phone.length != 10){
+                        has_phone_error = true;
+                    }
+
+                    if(has_phone_error){
+                        console.log("⚠ Erreur au niveau du champ téléphone ↓")
+                        console.log("output_phone", output_phone);
+                        errors_array["phone_error"].push(create_error_object(row, output_phone));
+                    }
+
+                    // Vérification si moyen de contact présent
+                    if( (has_email_error && (has_phone_error || is_phone_empty))
+                        || (is_email_empty && (has_phone_error || is_phone_empty))){
+                        console.log("⚠ Erreur : aucun moyen de communication valide ↓")
+                        console.log("output_email", output_email, "output_phone", output_phone);
+                        errors_array["missing_contact_info"].push(create_error_object(row, "Email : " + output_email + " Téléphone : " + output_phone));
+                        skip_line = true;
+                    }
+
+                    //Nettoyage firstname et lastname
+                    var cleaned_firstname = swap_accented_letters(output_firstname);
+                    var cleaned_lastname = swap_accented_letters(output_lastname);
+                    if(cleaned_firstname != output_firstname){
+                        console.log("⚠ Erreur au niveau du champ firstname ↓");
+                        console.log("Valeur initiale : ", output_firstname, "Valeur nettoyée : ", cleaned_firstname);
+                        output_firstname = cleaned_firstname;
+                    }
+                    if(cleaned_lastname != output_lastname){
+                        console.log("⚠ Erreur au niveau du champ lastname ↓");
+                        console.log("Valeur initiale : ", output_lastname, "Valeur nettoyée : ", cleaned_lastname);
+                        output_lastname = cleaned_lastname;
+                    }
+
+                    var has_firstname_error, has_lastname_error;
+                    has_firstname_error = has_lastname_error = false;
+                    var names_pattern = "([^a-zA-Z\- " + ALLOWED_ACCENTS + "'])+";
+                    var names_regex = new RegExp(names_pattern, "g");
+                    // Vérification firstname
+                    if(names_regex.exec(output_firstname)){
+                        has_firstname_error = true;
+                        console.log("⚠ Erreur fatale firstname ↓")
+                        console.log(output_firstname)
+                        errors_array["firstname_error"].push(create_error_object(row, output_firstname))
+                        skip_line = true;
+                    }
+                    // Vérification lastname
+                    if(names_regex.exec(output_lastname)){
+                        has_lastname_error = true;
+                        console.log("⚠ Erreur fatale lastname ↓")
+                        console.log(output_lastname)
+                        errors_array["lastname_error"].push(create_error_object(row, output_lastname))
+                        skip_line = true;
+                    }
+                    output_row[col_firstname_index] = output_firstname;
+                    output_row[col_lastname_index] = output_lastname;
+                    output_row[col_email_index] = output_email;
+                    output_row[col_phone_index] = output_phone;
+                }
+                csv[row] = output_row; // sauvegarde de la ligne
+
+                if(skip_line){
+                    console.log("Ligne " + (row + 1) + " supprimée car erreur fatale");
+                    csv.splice(row, row + 1);
+                    errors_array["skipped_lines"].push(create_error_object(row, output_row.join(", ")));
+                }
+            }
+            console.log("Version finale ↓");
+            console.log(csv);
+            var output_csv = stringify(csv);
+            var result_object = { "errors_array": errors_array, "output_csv": output_csv };
+            return result_object;
+        }
+
+        function createAndDownloadCSV(output_csv, file_name) {
+            // Create a Blob containing the CSV data
+            const blob = new Blob([output_csv], { type: "text/csv" });
+            
+            // Create a URL for the Blob
+            const url = URL.createObjectURL(blob);
+            
+            // Create a link element for downloading
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = file_name;
+            
+            // Trigger a click event to download the file
+            a.click();
+            
+            // Clean up by revoking the Object URL
+            URL.revokeObjectURL(url);
+        }
+
+        function clean_first_line(line_as_array){
+            var expected_columns = ["firstName", "lastName", "phone", "email"];
+            var forbidden_columns = ["id"];
+            var expected_columns_lowercase = expected_columns.map(column => column.toLowerCase());
+            var list_errors = [];
+            var output;
+            output = line_as_array.map(column => {
+                if(column.indexOf(" ") !== -1){
+                    list_errors.push("Espace détécté dans l'intitulé de la colonne " + column);
+                }
+                return column = column.trim();
+            });
+            var headers_line_lowercase = output.map(column => column.toLowerCase());
+            var error = false;
+            // Vérification présence colonnes obligatoires
+            for(var i = 0; i < expected_columns_lowercase.length; i++){
+                var one_column = expected_columns_lowercase[i];
+                var index = headers_line_lowercase.indexOf(one_column);
+                if(index === -1){
+                    error = true;
+                    list_errors.push("Colonne obligatoire \"" + one_column + "\" non trouvée");
+                }
+            }
+            // Vérification absence colonnes interdites
+            for(var i = 0; i < forbidden_columns.length; i++){
+                var one_column = forbidden_columns[i];
+                var index = headers_line_lowercase.indexOf(one_column);
+                if(index !== -1){
+                    error = true;
+                    list_errors.push("Colonne interdite \"" + one_column + "\" trouvée");
+                }
+            }
+            if(error){
+                return { "data": output, "warnings": list_errors, "fatal_error": error };
+            }else{
+                // Nettoyage casse des colonnes
+                for(var i = 0; i < output.length; i++){
+                    var col = output[i];
+                    var output_col = col;
+                    var col_lower = output_col.toLowerCase();
+                    var index = expected_columns_lowercase.indexOf(col_lower);
+                    if(index !== -1){
+                        output_col = expected_columns[index];
+                    }
+                    output[i] = output_col;
+                }
+                return { "data": output, "warnings": list_errors, "fatal_error": error };
+            }
+        }
+
+        const ACCENTED_LETTERS = "ĀāĄąÆæĂăɑɒČčɐʙĆćĎďɓɔĊċĈĉɕʗÐðʤĖėĚĐđʣĔɗɖʥĒěĘęɛɘFfĜĕɜɝɚəĞēɞʚʩɠĠġĢĝɣĦħğɤĤĥɦɧģɡɢʛɥʮʯʜĨĩɩĲİĬĭĮįɫĪīıɨɪĴĳɟĽľʄĸʞĹĺĻļĵʝĶķĿŀŁłʟʪɭɮɱɰŃńŅņɬʫɯŉŇňŊŋɴŎŏŐɳŌōØɲɵɷŒőŘřɼøŔŕŖŗɾœɶɸʠɹɺɻʀʁŠšʃɿŚśŞşʅŤťɽŜŝʂßʆſʇŢţŦŧʧʨʈʦŬŭÞþŪūŨũŰűŮůʉʊŲųʋʌŴŵʍʏŻżʔʡŶŷŹźŽžʕʢʎʐʑʒʓʖʘ";
+        const REPLACEMENT_LETTERS = ["A", "a", "A", "a", "AE", "ae", "A", "a", "a", "a", "C", "c", "a", "b", "C", "c", "D", "d", "d", "c", "C", "c", "C", "c", "c", "C", "D", "d", "dz", "E", "e", "E", "D", "d", "dz", "E", "d", "d", "dz", "E", "e", "E", "e", "e", "e", "F", "f", "G", "e", "e", "e", "e", "e", "G", "e", "g", "g", "fn", "f", "G", "g", "G", "g", "Y", "H", "h", "g", "h", "H", "h", "h", "h", "g", "g", "g", "g", "h", "h", "h", "h", "I", "i", "i", "ij", "i", "i", "i", "J", "j", "i", "i", "i", "i", "i", "i", "J", "ij", "j", "L", "l", "l", "k", "k", "L", "i", "L", "i", "j", "j", "K", "k", "L", "l", "L", "l", "l", "ls", "l", "lz", "m", "m", "N", "n", "N", "n", "l", "lz", "m", "n", "N", "n", "N", "n", "n", "O", "o", "O", "n", "O", "o", "o", "n", "o", "o", "OE", "o", "R", "r", "r", "o", "R", "r", "R", "r", "r", "oe", "oe", "o", "of", "r", "r", "r", "r", "r", "S", "s", "S", "s", "S", "s", "S", "s", "S", "T", "t", "t", "S", "s", "s", "S", "S", "s", "t", "T", "t", "T", "t", "tf", "tg", "t", "ts", "U", "u", "p", "p", "U", "u", "U", "u", "U", "u", "U", "u", "u", "u", "U", "u", "v", "v", "W", "w", "w", "y", "Z", "z", "z", "z", "Y", "y", "Z", "z", "Z", "z", "z", "z", "y", "z", "z", "z", "z", "z", "o"];
+        function swap_accented_letters(input){
+            var output = input;
+            var array_of_letters = output.split("");
+            array_of_letters = array_of_letters.map((letter) => {
+                var index = ACCENTED_LETTERS.indexOf(letter);
+                var output = letter;
+                if(index !== -1){
+                    var new_letter = REPLACEMENT_LETTERS[index];
+                    output = new_letter;
+                }
+                letter = output;
+                return letter;
+            });
+            output = array_of_letters.join("");
+            return output;
+        }
+
+        function create_error_object(line_number, input_value){
+            return { "line_number": line_number, "input_value": input_value };
+        }
+
+        function detectCSVSeparator(csvString) {
+            // Define a set of common CSV separators
+            const possibleSeparators = [',', ';', '\t', '\|'];
+            const possibleSeparatorsPattern = [",", ";", "\\t", "\\|"];
+
+            // Initialize an object to store the count of occurrences for each separator
+            const separatorCount = {};
+
+            // Iterate through each possible separator and count occurrences
+            possibleSeparatorsPattern.forEach(separator => {
+                const regex = new RegExp(separator, 'g');
+                const count = (csvString.match(regex) || []).length;
+                separatorCount[separator] = count;
+            });
+
+            // Find the separator with the highest count
+            var detectedSeparator = Object.keys(separatorCount).reduce((a, b) =>
+                separatorCount[a] > separatorCount[b] ? a : b
+            );
+
+            var index = possibleSeparatorsPattern.indexOf(detectedSeparator);
+            if(index !== -1){
+                detectedSeparator = possibleSeparators[index];
+            }
+
+            console.log("Séparateur détecté : " + detectedSeparator);
+
+            return detectedSeparator;
+        }
+    </script>
+</body>
+</html>
