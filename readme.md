@@ -1,9 +1,9 @@
-# Nettoyer CA4
+# Nettoyer CSV
 
 ## Description
-Ce script permet de corriger les problèmes d'upload de fichier CSV avec CA4.
+Ce script permet de corriger les problèmes d'upload de fichier CSV.
 
-Il corrige ce qui peut l'être et supprime les lignes qui bloqueraient l'import dans CA.
+Il corrige ce qui peut l'être et supprime les lignes qui bloqueraient l'import.
 
 Le détail des erreurs s'affiche pour que le recruteur puisse corriger son fichier d'entrée.
 
