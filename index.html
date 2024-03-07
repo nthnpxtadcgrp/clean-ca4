@@ -641,6 +641,12 @@
                         console.log("Champ téléphone nettoyé des points ↓");
                         console.log(output_phone);
                     }
+                    // Symbole "+"
+                    if(output_phone.startsWith("336") || output_phone.startsWith("337")){
+                        output_phone = "+" + output_phone;
+                        console.log("Champ téléphone préfixé du symbole \"+\" ↓");
+                        console.log(output_phone);
+                    }
 
                     // Vérification format téléphone
                     var has_phone_error, is_phone_empty;
